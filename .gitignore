@@ -1,7 +1,11 @@
-logs
-target
+#intellij idea specific
 /.idea
 /.idea_modules
+
+#play framework
+logs
+target
+
 /.classpath
 /.project
 /.settings
