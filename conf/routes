@@ -3,13 +3,20 @@
 # ~~~~
 
 # An example controller showing a sample home page
-GET     /                           controllers.HomeController.index
+GET        /                                  controllers.HomeController.index
 # An example controller showing how to use dependency injection
-GET     /count                      controllers.CountController.count
+GET        /count                             controllers.CountController.count
 # An example controller showing how to write asynchronous code
-GET     /message                    controllers.AsyncController.message
+GET        /message                           controllers.AsyncController.message
 
-GET     /grammar/:name/:sentence    controllers.Grammar.show(name: String, sentence: String)
+GET        /grammar/currency/:sentence        controllers.Grammar.currency(sentence: String)
+GET        /grammar/date/:sentence            controllers.Grammar.date(sentence: String)
+GET        /grammar/number/:sentence          controllers.Grammar.number(sentence: String)
+GET        /grammar/ordinal/:sentence         controllers.Grammar.ordinal(sentence: String)
+GET        /grammar/time/:sentence            controllers.Grammar.time(sentence: String)
+
+GET        /grammar                           controllers.Grammar.show
+
 
 # Map static resources from the /public folder to the /assets URL path
-GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
+GET        /assets/*file                      controllers.Assets.versioned(path="/public", file: Asset)

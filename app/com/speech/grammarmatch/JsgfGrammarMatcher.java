@@ -28,38 +28,25 @@ public class JsgfGrammarMatcher implements IGrammarMatcher {
         RuleGrammar grammar = recognizer.getRuleGrammar( grammarType.grammarName() );
 
         try {
-            long startTime = System.currentTimeMillis();
-
             grammar.setEnabled( true );
             recognizer.commitChanges();
-            System.err.println( "GRAMMARMATCH " + grammar.getName() + " committed changes time: " + (System.currentTimeMillis() - startTime) );
-            //match all input sentences against the grammar, one at a time
-
-            long parseTime = System.currentTimeMillis();
 
             //replace special chars
             sentence = replaceChars( sentence );
 
-            System.err.println( "GRAMMARMATCH " + grammar.getName() + " matching sentence: " + sentence );
             RuleParse p = grammar.parse( sentence, null );
             if ( p != null ) {
                 //a match was found
                 ActionTagsParser parser = new ActionTagsParser();
                 parser.parseTags( p );
-                System.err.println( "GRAMMARMATCH MATCH, parse   time:         " + (System.currentTimeMillis() - parseTime) );
                 out = ( String ) parser.get( "$value" );
             } else {
-                System.err.println( "GRAMMARMATCH NOMatch, parse time:         " + (System.currentTimeMillis() - parseTime) );
                 out = "NOMATCH";
             }
 
         } finally {
             grammar.setEnabled( false );
-            try {
-                recognizer.commitChanges();
-            } catch ( GrammarException e ) {
-                System.err.println( "could not disable grammar" );
-            }
+            recognizer.commitChanges();
         }
         return out;
     }
