@@ -1,6 +1,7 @@
 package controllers
 
 import java.text.NumberFormat
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
 
@@ -9,6 +10,11 @@ import play.api.Logger
 import play.api.mvc.{Action, Controller}
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+
+import play.api.libs.concurrent.Execution.Implicits.defaultContext
+
+import scala.concurrent.Future
+import scala.util.Either
 
 
 /**
@@ -19,41 +25,46 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
  */
 class Grammar @Inject() ( gmService: GrammarMatcherService ) extends Controller {
 
-  def date( sentence: String ) = Action {
-    matchGrammar( GrammarType.DATE, sentence ) match {
-      case Left(m) => Ok( sentence + " did not match" )
-      case Right(m) => Ok("Date: " + formatGrammarDate( m ) )
-    }
 
+  def date( sentence: String ) = Action.async {
+    val futureMatch: Future[Either[String,String]] = scala.concurrent.Future { matchGrammar( GrammarType.DATE, sentence) }
+    futureMatch map {
+      case Left(m) => Ok( m )
+      case Right(m) => Ok( formatDate( m ) )
+    }
   }
 
 
-  def currency( sentence: String ) = Action {
+  def currency( sentence: String ) = Action.async {
     val currencyFormatter = NumberFormat.getCurrencyInstance( Locale.US )
-    matchGrammar( GrammarType.CURRENCY, sentence ) match {
-      case Left(m) => Ok( sentence + " did not match" )
-      case Right(m) => Ok("Currency: " + currencyFormatter.format( m.toDouble ) )
+    val futureMatch: Future[Either[String,String]] = scala.concurrent.Future { matchGrammar( GrammarType.CURRENCY, sentence) }
+    futureMatch map {
+      case Left(m) => Ok( m )
+      case Right(m) => Ok( currencyFormatter.format( m.toDouble ) )
     }
   }
 
-  def time( sentence: String ) = Action {
-    matchGrammar( GrammarType.TIME, sentence ) match {
-      case Left(m) => Ok( sentence + " did not match" )
-      case Right(m) => Ok("Time: " + m )
+  def time( sentence: String ) = Action.async {
+    val futureMatch: Future[Either[String,String]] = scala.concurrent.Future { matchGrammar( GrammarType.TIME, sentence) }
+    futureMatch map {
+      case Left(m) => Ok( m )
+      case Right(m) => Ok( formatTime( m ) )
     }
   }
 
-  def number( sentence: String ) = Action {
-    matchGrammar( GrammarType.NUMBER, sentence ) match {
-      case Left(m) => Ok( sentence + " did not match" )
-      case Right(m) => Ok("Number: " + m )
+  def number( sentence: String ) = Action.async {
+    val futureMatch: Future[Either[String,String]] = scala.concurrent.Future { matchGrammar( GrammarType.NUMBER, sentence) }
+    futureMatch map {
+      case Left(m) => Ok( m )
+      case Right(m) => Ok( m )
     }
   }
 
-  def ordinal( sentence: String ) = Action {
-    matchGrammar( GrammarType.ORDINAL, sentence ) match {
-      case Left(m) => Ok( sentence + " did not match" )
-      case Right(m) => Ok("Ordinal: " + m )
+  def ordinal( sentence: String ) = Action.async {
+    val futureMatch: Future[Either[String,String]] = scala.concurrent.Future { matchGrammar( GrammarType.ORDINAL, sentence) }
+    futureMatch map {
+      case Left(m) => Ok( m )
+      case Right(m) => Ok( m )
     }
   }
 
@@ -62,6 +73,19 @@ class Grammar @Inject() ( gmService: GrammarMatcherService ) extends Controller 
   }
 
   //Helper methods
+//  def nameToGrammarType( name: String) : Option[GrammarType] = {
+//    name.toLowerCase match {
+//      case "date" => Some( GrammarType.DATE )
+//      case "currency" => Some( GrammarType.CURRENCY )
+//      case "number" => Some( GrammarType.NUMBER )
+//      case "ordinal" => Some( GrammarType.ORDINAL )
+//      case "time" => Some( GrammarType.TIME )
+//      case _ => None
+//    }
+//
+//  }
+
+
   def matchGrammar( grammarType: GrammarType, sentence: String ) : Either[String,String] = {
     val jsgfRecognizer = new JsgfGrammarMatcher
     //could block here waiting for a grammar recognizer
@@ -87,10 +111,17 @@ class Grammar @Inject() ( gmService: GrammarMatcherService ) extends Controller 
    * @param inDate
    * @return
    */
-  def formatGrammarDate( inDate: String ) : String = {
-    val dateFormat = new java.text.SimpleDateFormat("yyyyMMdd")
-    val outFormat = new java.text.SimpleDateFormat("MMM dd yyyy")
+  def formatDate( inDate: String ) : String = {
+    val dateFormat = DateTimeFormatter.ofPattern("yyyyMMdd")
+    val outFormat = DateTimeFormatter.ofPattern("MMM dd yyyy")
     outFormat.format( dateFormat.parse( inDate ))
+  }
+
+  def formatTime( time: String ) : String = {
+    val inTime = time.toUpperCase
+    val timeFormat = DateTimeFormatter.ofPattern("hhmma")
+    val outFormat = DateTimeFormatter.ofPattern("h:mma")
+    outFormat.format( timeFormat.parse(inTime) )
   }
 
 
