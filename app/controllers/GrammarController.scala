@@ -3,6 +3,7 @@ package controllers
 import java.text.NumberFormat
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.regex.{Pattern, Matcher}
 import javax.inject.Inject
 
 import com.speech.grammarmatch.{JsgfGrammarMatcher, GrammarMatcherService, GrammarType}
@@ -23,7 +24,7 @@ import scala.util.Either
  * Date: 2/24/2016
  * Time: 1:51 PM
  */
-class Grammar @Inject() ( gmService: GrammarMatcherService ) extends Controller {
+class GrammarController @Inject() ( gmService: GrammarMatcherService ) extends Controller {
 
 
   def date( sentence: String ) = Action.async {
@@ -36,11 +37,10 @@ class Grammar @Inject() ( gmService: GrammarMatcherService ) extends Controller 
 
 
   def currency( sentence: String ) = Action.async {
-    val currencyFormatter = NumberFormat.getCurrencyInstance( Locale.US )
     val futureMatch: Future[Either[String,String]] = scala.concurrent.Future { matchGrammar( GrammarType.CURRENCY, sentence) }
     futureMatch map {
       case Left(m) => Ok( m )
-      case Right(m) => Ok( currencyFormatter.format( m.toDouble ) )
+      case Right(m) => Ok( formatCurrency( m ) )
     }
   }
 
@@ -68,8 +68,15 @@ class Grammar @Inject() ( gmService: GrammarMatcherService ) extends Controller 
     }
   }
 
-  def show() = Action {
-    NotImplemented
+  def matchSentence( sentence:String ) = Action.async {
+    val futureMatch: Future[String] = scala.concurrent.Future {
+      grammarChain.foldLeft(sentence) { (sent,grammar) =>
+        findAndReplaceMatches( grammar, sent )
+      }
+    }
+    futureMatch map { s =>
+      Ok(s)
+    }
   }
 
   //Helper methods
@@ -124,5 +131,77 @@ class Grammar @Inject() ( gmService: GrammarMatcherService ) extends Controller 
     outFormat.format( timeFormat.parse(inTime) )
   }
 
+  def formatCurrency( currency:String ) : String = {
+    val currencyFormatter = NumberFormat.getCurrencyInstance( Locale.US )
+    currencyFormatter.format( currency.toDouble )
+  }
 
+  //The order that grammars should be run
+  val grammarChain = List( GrammarType.CURRENCY, GrammarType.DATE, GrammarType.TIME, GrammarType.ORDINAL, GrammarType.NUMBER )
+
+  def grammarFormatter( grammarType:GrammarType, sentence:String ) = grammarType match {
+    case GrammarType.CURRENCY => formatCurrency( sentence )
+    case GrammarType.DATE => formatDate( sentence )
+    case GrammarType.NUMBER => sentence
+    case GrammarType.ORDINAL => sentence
+    case GrammarType.TIME => formatTime( sentence )
+  }
+
+
+  def grammarMaxMin( grammarType:GrammarType ) = grammarType match {
+    //returns (MAX,MIN) word counts for the different grammars
+    case GrammarType.CURRENCY => ( 14,1 )
+    case GrammarType.DATE => ( 8,2 )
+    case GrammarType.NUMBER => ( 9,1 )
+    case GrammarType.ORDINAL => ( 9,1 )
+    case GrammarType.TIME => ( 4,2 )
+  }
+
+  def wordCombinations( sentence: String, slideSize: Int ) = {
+    val words = sentence.split(" ")
+    words.sliding(slideSize).foldLeft( Vector[String]() ) { (vs,v) =>
+      vs :+ v.mkString(" ")
+    }
+  }
+
+
+  def findFirstAndReplaceAll( phrases:Vector[String], sentence:String, grammar: GrammarType ): Option[String] = {
+    def replaceAll( sentence:String, target:String, replacement:String ) = {
+      var newSentence = sentence.replace( target,replacement )
+      var oldSentence = sentence
+      while ( newSentence != oldSentence ) {
+        oldSentence = newSentence
+        newSentence = newSentence.replace( target, replacement )
+
+      }
+      newSentence
+    }
+
+    for ( phrase <- phrases ) {
+      matchGrammar( grammar, phrase ) match {
+        case Right(s) =>
+          return Some( replaceAll( sentence, phrase, grammarFormatter( grammar,s )))
+        case _ =>
+      }
+    }
+    None
+  }
+
+  def findAndReplaceMatches( grammarType:GrammarType, sentence: String ) : String = {
+    var newSentence = sentence
+
+    val (gramMax,gramMin) = grammarMaxMin( grammarType )
+
+    for ( slide <- gramMax to gramMin by -1 ) {
+      var phrases = wordCombinations( newSentence, slide )
+      var replacementSentence = findFirstAndReplaceAll( phrases, newSentence, grammarType )
+
+      while ( replacementSentence.isDefined ) {
+        newSentence = replacementSentence.get
+        phrases = wordCombinations( newSentence , slide )
+        replacementSentence = findFirstAndReplaceAll( phrases, newSentence, grammarType )
+      }
+    }
+    newSentence
+  }
 }

@@ -9,13 +9,13 @@ GET        /count                             controllers.CountController.count
 # An example controller showing how to write asynchronous code
 GET        /message                           controllers.AsyncController.message
 
-GET        /grammar/currency/:sentence        controllers.Grammar.currency(sentence: String)
-GET        /grammar/date/:sentence            controllers.Grammar.date(sentence: String)
-GET        /grammar/number/:sentence          controllers.Grammar.number(sentence: String)
-GET        /grammar/ordinal/:sentence         controllers.Grammar.ordinal(sentence: String)
-GET        /grammar/time/:sentence            controllers.Grammar.time(sentence: String)
+GET        /grammar/currency/:sentence        controllers.GrammarController.currency(sentence: String)
+GET        /grammar/date/:sentence            controllers.GrammarController.date(sentence: String)
+GET        /grammar/number/:sentence          controllers.GrammarController.number(sentence: String)
+GET        /grammar/ordinal/:sentence         controllers.GrammarController.ordinal(sentence: String)
+GET        /grammar/time/:sentence            controllers.GrammarController.time(sentence: String)
 
-GET        /grammar                           controllers.Grammar.show
+GET        /grammar/:sentence                 controllers.GrammarController.matchSentence(sentence: String)
 
 
 # Map static resources from the /public folder to the /assets URL path
