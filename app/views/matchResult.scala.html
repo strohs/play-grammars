@@ -1,0 +1,21 @@
+@( matchResults: List[GrammarMatchInfo])
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Grammar Match Result</title>
+    </head>
+    <body>
+        <table border="1">
+            @for( mr <- matchResults ) {
+                <tr>
+                    <td>@mr.grammarType</td>
+                    <td>@mr.in</td>
+                    <td>@mr.out</td>
+                    <td>@mr.grammarMs ms</td>
+                </tr>
+            }
+        </table>
+    </body>
+</html>

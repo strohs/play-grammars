@@ -1,14 +1,18 @@
 package controllers
 
-import java.text.NumberFormat
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.regex.{Pattern, Matcher}
 import javax.inject.Inject
 
-import com.speech.grammarmatch.{JsgfGrammarMatcher, GrammarMatcherService, GrammarType}
+import com.speech.grammarmatch.{GrammarUtils, JsgfGrammarMatcher, GrammarMatcherService, GrammarType}
+import models.{Sentence, GrammarMatchInfo}
 import play.api.Logger
-import play.api.mvc.{Action, Controller}
+import play.api.i18n.{I18nSupport, MessagesApi}
+import play.api.mvc._
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
+
+import play.api.data._
+import play.api.data.Forms._
 
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
@@ -19,19 +23,44 @@ import scala.util.Either
 
 
 /**
- * Created with IntelliJ IDEA.
+ * Controller for matching a string of words against a 'chain' of speech grammars OR for matching a string of words
+ * against a specific speech recognition grammar
  * User: Cliff
  * Date: 2/24/2016
  * Time: 1:51 PM
  */
-class GrammarController @Inject() ( gmService: GrammarMatcherService ) extends Controller {
+class GrammarController @Inject() ( gmService: GrammarMatcherService, val messagesApi: MessagesApi ) extends Controller with I18nSupport {
 
+  //GrammarMatch Form
+  val gmForm = Form (
+    mapping(
+      "sentence" -> nonEmptyText
+    )(Sentence.apply)(Sentence.unapply)
+  )
+
+  def index = Action {
+    Ok( views.html.grammarMatch(gmForm) )
+  }
+
+
+  def grammarMatchPost = Action { implicit request =>
+    gmForm.bindFromRequest.fold(
+      formWithErrors => {
+        //binding failure
+        BadRequest( views.html.grammarMatch(formWithErrors))
+      },
+      sentence => {
+        //binding success, value of forms bound into case class 'sentence'
+        Redirect( routes.GrammarController.matchSentence( sentence.sentence ) )
+      }
+    )
+  }
 
   def date( sentence: String ) = Action.async {
     val futureMatch: Future[Either[String,String]] = scala.concurrent.Future { matchGrammar( GrammarType.DATE, sentence) }
     futureMatch map {
       case Left(m) => Ok( m )
-      case Right(m) => Ok( formatDate( m ) )
+      case Right(m) => Ok( GrammarUtils.formatDate( m ) )
     }
   }
 
@@ -40,7 +69,7 @@ class GrammarController @Inject() ( gmService: GrammarMatcherService ) extends C
     val futureMatch: Future[Either[String,String]] = scala.concurrent.Future { matchGrammar( GrammarType.CURRENCY, sentence) }
     futureMatch map {
       case Left(m) => Ok( m )
-      case Right(m) => Ok( formatCurrency( m ) )
+      case Right(m) => Ok( GrammarUtils.formatCurrency( m ) )
     }
   }
 
@@ -48,7 +77,7 @@ class GrammarController @Inject() ( gmService: GrammarMatcherService ) extends C
     val futureMatch: Future[Either[String,String]] = scala.concurrent.Future { matchGrammar( GrammarType.TIME, sentence) }
     futureMatch map {
       case Left(m) => Ok( m )
-      case Right(m) => Ok( formatTime( m ) )
+      case Right(m) => Ok( GrammarUtils.formatTime( m ) )
     }
   }
 
@@ -69,30 +98,41 @@ class GrammarController @Inject() ( gmService: GrammarMatcherService ) extends C
   }
 
   def matchSentence( sentence:String ) = Action.async {
-    val futureMatch: Future[String] = scala.concurrent.Future {
-      grammarChain.foldLeft(sentence) { (sent,grammar) =>
-        findAndReplaceMatches( grammar, sent )
+//    val futureMatch: Future[String] = scala.concurrent.Future {
+//      GrammarUtils.defaultChain.foldLeft(sentence) { (sent,grammar) =>
+//        findAndReplaceMatches( grammar, sent )
+//      }
+//    }
+//    futureMatch map { s =>
+//      Ok(s)
+//    }
+      val grammarMatches: Future[List[GrammarMatchInfo]] = scala.concurrent.Future {
+        traceMatches( sentence )
       }
+      grammarMatches map { gmi =>
+        Ok( views.html.matchResult( gmi ) )
+      }
+
+  }
+
+  //using this to test Play's marshalling to JSON
+  def trace( trace:Boolean, sentence:String ) = Action.async {
+    val grammarMatches: Future[List[GrammarMatchInfo]] = scala.concurrent.Future {
+      traceMatches( sentence )
     }
-    futureMatch map { s =>
-      Ok(s)
+    grammarMatches map { gmr =>
+      Ok( Json.toJson(gmr) )
     }
   }
 
-  //Helper methods
-//  def nameToGrammarType( name: String) : Option[GrammarType] = {
-//    name.toLowerCase match {
-//      case "date" => Some( GrammarType.DATE )
-//      case "currency" => Some( GrammarType.CURRENCY )
-//      case "number" => Some( GrammarType.NUMBER )
-//      case "ordinal" => Some( GrammarType.ORDINAL )
-//      case "time" => Some( GrammarType.TIME )
-//      case _ => None
-//    }
-//
-//  }
 
-
+  /**
+   * matches sentence against the specified grammar and returns an [[Either]] containing the result of the match
+   * @param grammarType the grammar to match against
+   * @param sentence space seperated string of words to match against the grammar
+   * @return [[Right]] if the grammar matched the sentence, in which case Right will contain the result of the match
+   *        [[Left]] if the grammar did not match, in which case case Left will contain the string "NOMATCH"
+   */
   def matchGrammar( grammarType: GrammarType, sentence: String ) : Either[String,String] = {
     val jsgfRecognizer = new JsgfGrammarMatcher
     //could block here waiting for a grammar recognizer
@@ -114,73 +154,33 @@ class GrammarController @Inject() ( gmService: GrammarMatcherService ) extends C
   }
 
   /**
-   * format a date from the date grammar (yyyyMMdd format) into MMM dd yyyy format
-   * @param inDate
-   * @return
+   * builds a list of inputs and outputs to the speech recognition grammars
+   * @param sentence - space seperated list of words to be matched against
+   * @return list of [[GrammarMatchInfo]] objects
    */
-  def formatDate( inDate: String ) : String = {
-    val dateFormat = DateTimeFormatter.ofPattern("yyyyMMdd")
-    val outFormat = DateTimeFormatter.ofPattern("MMM dd yyyy")
-    outFormat.format( dateFormat.parse( inDate ))
-  }
+  def traceMatches( sentence:String ) : List[GrammarMatchInfo] = {
+    var in,out = sentence
+    var gms = List[GrammarMatchInfo]()
 
-  def formatTime( time: String ) : String = {
-    val inTime = time.toUpperCase
-    val timeFormat = DateTimeFormatter.ofPattern("hhmma")
-    val outFormat = DateTimeFormatter.ofPattern("h:mma")
-    outFormat.format( timeFormat.parse(inTime) )
-  }
-
-  def formatCurrency( currency:String ) : String = {
-    val currencyFormatter = NumberFormat.getCurrencyInstance( Locale.US )
-    currencyFormatter.format( currency.toDouble )
-  }
-
-  //The order that grammars should be run
-  val grammarChain = List( GrammarType.CURRENCY, GrammarType.DATE, GrammarType.TIME, GrammarType.ORDINAL, GrammarType.NUMBER )
-
-  def grammarFormatter( grammarType:GrammarType, sentence:String ) = grammarType match {
-    case GrammarType.CURRENCY => formatCurrency( sentence )
-    case GrammarType.DATE => formatDate( sentence )
-    case GrammarType.NUMBER => sentence
-    case GrammarType.ORDINAL => sentence
-    case GrammarType.TIME => formatTime( sentence )
-  }
-
-
-  def grammarMaxMin( grammarType:GrammarType ) = grammarType match {
-    //returns (MAX,MIN) word counts for the different grammars
-    case GrammarType.CURRENCY => ( 14,1 )
-    case GrammarType.DATE => ( 8,2 )
-    case GrammarType.NUMBER => ( 9,1 )
-    case GrammarType.ORDINAL => ( 9,1 )
-    case GrammarType.TIME => ( 4,2 )
-  }
-
-  def wordCombinations( sentence: String, slideSize: Int ) = {
-    val words = sentence.split(" ")
-    words.sliding(slideSize).foldLeft( Vector[String]() ) { (vs,v) =>
-      vs :+ v.mkString(" ")
+    for ( gram <- GrammarUtils.defaultChain ) {
+      val st = System.nanoTime()
+      in = out
+      out = findAndReplaceMatches( gram, in )
+      val elapsedMillis:Long = (System.nanoTime() - st) / 1000000
+      if (in != out )
+        gms = gms :+ GrammarMatchInfo( gram.grammarName(), in, out, elapsedMillis )
     }
+    gms
   }
+
+
 
 
   def findFirstAndReplaceAll( phrases:Vector[String], sentence:String, grammar: GrammarType ): Option[String] = {
-    def replaceAll( sentence:String, target:String, replacement:String ) = {
-      var newSentence = sentence.replace( target,replacement )
-      var oldSentence = sentence
-      while ( newSentence != oldSentence ) {
-        oldSentence = newSentence
-        newSentence = newSentence.replace( target, replacement )
-
-      }
-      newSentence
-    }
-
     for ( phrase <- phrases ) {
       matchGrammar( grammar, phrase ) match {
         case Right(s) =>
-          return Some( replaceAll( sentence, phrase, grammarFormatter( grammar,s )))
+          return Some( sentence.replaceAll( phrase, Matcher.quoteReplacement( GrammarUtils.grammarFormatter( grammar, s ))))
         case _ =>
       }
     }
@@ -190,18 +190,27 @@ class GrammarController @Inject() ( gmService: GrammarMatcherService ) extends C
   def findAndReplaceMatches( grammarType:GrammarType, sentence: String ) : String = {
     var newSentence = sentence
 
-    val (gramMax,gramMin) = grammarMaxMin( grammarType )
+    val (gramMax,gramMin) = GrammarUtils.grammarMaxMin( grammarType )
 
     for ( slide <- gramMax to gramMin by -1 ) {
-      var phrases = wordCombinations( newSentence, slide )
+      var phrases = GrammarUtils.wordCombinations( newSentence, slide )
       var replacementSentence = findFirstAndReplaceAll( phrases, newSentence, grammarType )
 
       while ( replacementSentence.isDefined ) {
         newSentence = replacementSentence.get
-        phrases = wordCombinations( newSentence , slide )
+        phrases = GrammarUtils.wordCombinations( newSentence , slide )
         replacementSentence = findFirstAndReplaceAll( phrases, newSentence, grammarType )
       }
     }
     newSentence
   }
+
+
+  //define implicits for converting to/from JSON
+  implicit val grammarMatchInfoWrites: Writes[GrammarMatchInfo] = (
+    (JsPath \ "grammarType").write[String] and
+      (JsPath \ "in").write[String] and
+      (JsPath \ "out").write[String] and
+      (JsPath \ "grammarMs").write[Long]
+    )(unlift(GrammarMatchInfo.unapply))
 }

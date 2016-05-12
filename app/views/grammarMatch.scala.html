@@ -1,0 +1,17 @@
+@(gmForm: Form[Sentence])(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Grammar Matcher</title>
+    </head>
+    <body>
+        @helper.form(action = routes.GrammarController.grammarMatchPost()) {
+            @helper.inputText( gmForm( "sentence" ), args = 'size -> 80, 'placeholder -> "Enter the fully spelled sentence" )
+            <input type="submit" value="Match">
+        }
+    </body>
+</html>
+
+

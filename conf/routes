@@ -3,7 +3,8 @@
 # ~~~~
 
 # An example controller showing a sample home page
-GET        /                                  controllers.HomeController.index
+#GET        /                                  controllers.HomeController.index
+GET        /                                  controllers.GrammarController.index
 # An example controller showing how to use dependency injection
 GET        /count                             controllers.CountController.count
 # An example controller showing how to write asynchronous code
@@ -15,8 +16,11 @@ GET        /grammar/number/:sentence          controllers.GrammarController.numb
 GET        /grammar/ordinal/:sentence         controllers.GrammarController.ordinal(sentence: String)
 GET        /grammar/time/:sentence            controllers.GrammarController.time(sentence: String)
 
-GET        /grammar/:sentence                 controllers.GrammarController.matchSentence(sentence: String)
+GET        /grammar                           controllers.GrammarController.trace(trace:Boolean, sentence: String)
+GET        /match/:sentence                   controllers.GrammarController.matchSentence(sentence: String)
 
+POST       /match                             controllers.GrammarController.grammarMatchPost
 
 # Map static resources from the /public folder to the /assets URL path
+GET        /assets/grammars/:file             controllers.Assets.at( path="/public/grammars", file )
 GET        /assets/*file                      controllers.Assets.versioned(path="/public", file: Asset)
