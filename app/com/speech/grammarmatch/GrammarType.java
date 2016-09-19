@@ -1,7 +1,7 @@
 package com.speech.grammarmatch;
 
 /**
- * Enum that maps grammar names to their grammar file
+ * Enum that lists all the speech grammars supported
  */
 public enum GrammarType {
     CURRENCY,

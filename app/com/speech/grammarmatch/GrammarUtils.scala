@@ -21,10 +21,6 @@ object GrammarUtils {
     result
   }
 
-  //The order that grammars should be run. The grammar that could match the greatest number of words (at one time) should
-  // be run first, then the next greatest, and so on
-  val defaultChain = List( GrammarType.CURRENCY, GrammarType.DATE, GrammarType.TIME, GrammarType.ORDINAL, GrammarType.NUMBER )
-
   def wordCombinations( sentence: String, slideSize: Int ) = {
     val words = sentence.split(" ")
     words.sliding(slideSize).foldLeft( Vector[String]() ) { (vs,v) =>

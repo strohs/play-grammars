@@ -4,7 +4,7 @@ import java.util.regex.{Pattern, Matcher}
 import javax.inject.Inject
 
 import com.speech.grammarmatch.{GrammarUtils, JsgfGrammarMatcher, GrammarMatcherService, GrammarType}
-import models.{Sentence, GrammarMatchInfo}
+import models.{GrammarOrder, Sentence, GrammarMatchInfo}
 import play.api.Logger
 import play.api.i18n.{I18nSupport, MessagesApi}
 import play.api.mvc._
@@ -106,24 +106,24 @@ class GrammarController @Inject() ( gmService: GrammarMatcherService, val messag
 //    futureMatch map { s =>
 //      Ok(s)
 //    }
-      val grammarMatches: Future[List[GrammarMatchInfo]] = scala.concurrent.Future {
-        traceMatches( sentence )
+      val matchResults: Future[List[GrammarMatchInfo]] = scala.concurrent.Future {
+        matchGrammars( sentence )
       }
-      grammarMatches map { gmi =>
+      matchResults map { gmi =>
         Ok( views.html.matchResult( gmi ) )
       }
 
   }
 
-  //using this to test Play's marshalling to JSON
-  def trace( trace:Boolean, sentence:String ) = Action.async {
-    val grammarMatches: Future[List[GrammarMatchInfo]] = scala.concurrent.Future {
-      traceMatches( sentence )
-    }
-    grammarMatches map { gmr =>
-      Ok( Json.toJson(gmr) )
-    }
-  }
+  //used this function to test Play's marshalling to JSON
+//  def trace( trace:Boolean, sentence:String ) = Action.async {
+//    val grammarMatches: Future[List[GrammarMatchInfo]] = scala.concurrent.Future {
+//      traceMatches( sentence )
+//    }
+//    grammarMatches map { gmr =>
+//      Ok( Json.toJson(gmr) )
+//    }
+//  }
 
 
   /**
@@ -154,15 +154,15 @@ class GrammarController @Inject() ( gmService: GrammarMatcherService, val messag
   }
 
   /**
-   * builds a list of inputs and outputs to the speech recognition grammars
-   * @param sentence - space seperated list of words to be matched against
+   * matches the sentence against one or more speech recognition grammars
+   * @param sentence - space seperated list of words to match against grammars
    * @return list of [[GrammarMatchInfo]] objects
    */
-  def traceMatches( sentence:String ) : List[GrammarMatchInfo] = {
+  def matchGrammars( sentence:String ) : List[GrammarMatchInfo] = {
     var in,out = sentence
     var gms = List[GrammarMatchInfo]()
 
-    for ( gram <- GrammarUtils.defaultChain ) {
+    for ( gram <- GrammarOrder.default ) {
       val st = System.nanoTime()
       in = out
       out = findAndReplaceMatches( gram, in )

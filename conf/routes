@@ -10,16 +10,20 @@ GET        /count                             controllers.CountController.count
 # An example controller showing how to write asynchronous code
 GET        /message                           controllers.AsyncController.message
 
+# these routes are used to test specific JSGF grammars
 GET        /grammar/currency/:sentence        controllers.GrammarController.currency(sentence: String)
 GET        /grammar/date/:sentence            controllers.GrammarController.date(sentence: String)
 GET        /grammar/number/:sentence          controllers.GrammarController.number(sentence: String)
 GET        /grammar/ordinal/:sentence         controllers.GrammarController.ordinal(sentence: String)
 GET        /grammar/time/:sentence            controllers.GrammarController.time(sentence: String)
 
-GET        /grammar                           controllers.GrammarController.trace(trace:Boolean, sentence: String)
+#GET        /grammar                           controllers.GrammarController.trace(trace:Boolean, sentence: String)
 GET        /match/:sentence                   controllers.GrammarController.matchSentence(sentence: String)
 
 POST       /match                             controllers.GrammarController.grammarMatchPost
+
+#bootstrap URLs
+GET        /bootstrap/hello                   controllers.BootstrapController.hello
 
 # Map static resources from the /public folder to the /assets URL path
 GET        /assets/grammars/:file             controllers.Assets.at( path="/public/grammars", file )
